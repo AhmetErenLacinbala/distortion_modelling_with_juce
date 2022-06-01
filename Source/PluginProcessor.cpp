@@ -151,8 +151,6 @@ void DistortionModellingAudioProcessor::processBlock (juce::AudioBuffer<float>& 
 
     auto gain = apvts.getRawParameterValue("Gain");
     gain->load(); std::cout << gain << std::endl;
-    auto range = apvts.getRawParameterValue("Range");
-    range->load();
     auto blend = apvts.getRawParameterValue("Blend");
     blend->load();
     auto volume = apvts.getRawParameterValue("Volume");
@@ -181,7 +179,7 @@ void DistortionModellingAudioProcessor::processBlock (juce::AudioBuffer<float>& 
 
         for (int sample = 0; sample < buffer.getNumSamples(); sample++) {
             float cleanSignal = *channelData;
-            *channelData *= *gain * *range;
+            *channelData *= *gain;
             *channelData = ((((2.f / M_PI) * atan(*channelData)) * *blend) + (cleanSignal * (1.f / *blend)) / 2) * *volume;
 
             channelData++;
@@ -216,8 +214,6 @@ void DistortionModellingAudioProcessor::getStateInformation (juce::MemoryBlock& 
     // You could do that either as raw data, or use the XML or ValueTree classes
     // as intermediaries to make it easy to save and load complex data.
 
-    /*juce::MemoryOutputStream stream(destData, false);
-    state->state.writeToStream(stream);*/
 }
 
 void DistortionModellingAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
@@ -227,16 +223,12 @@ void DistortionModellingAudioProcessor::setStateInformation (const void* data, i
 
     juce::ValueTree tree = juce::ValueTree::readFromData(data, sizeInBytes);
 
-    /*if (tree.isValid()) {
-        state->state = tree;
-    }*/
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout DistortionModellingAudioProcessor::createParameterLayout() {
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
 
-    layout.add(std::make_unique<juce::AudioParameterFloat>("Gain", "Gain", juce::NormalisableRange<float>(0.f, 1.f, 0.0001), 1.0));
-    layout.add(std::make_unique<juce::AudioParameterFloat>("Range", "Range", juce::NormalisableRange<float>(0.f, 3000.f, 0.0001), 1.0));
+    layout.add(std::make_unique<juce::AudioParameterFloat>("Gain", "Gain", juce::NormalisableRange<float>(1.f, 1000.f, 0.0001), 1.0));
     layout.add(std::make_unique<juce::AudioParameterFloat>("Blend", "Blend", juce::NormalisableRange<float>(0.f, 1.f, 0.0001), 1.0));
     layout.add(std::make_unique<juce::AudioParameterFloat>("Volume", "Volume", juce::NormalisableRange<float>(0.f, 2.f, 0.0001), 1.0));
 
