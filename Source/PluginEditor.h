@@ -26,15 +26,7 @@ public:
 
 private:
 
-    /*juce::ScopedPointer<juce::Slider> gainKnob;
-    juce::ScopedPointer<juce::Slider> rangeKnob;
-    juce::ScopedPointer<juce::Slider> blendKnob;
-    juce::ScopedPointer<juce::Slider> volumeKnob;
-
-    juce::ScopedPointer<juce::AudioProcessorValueTreeState::SliderAttachment> gainAttachment; //saves parameter values
-    juce::ScopedPointer<juce::AudioProcessorValueTreeState::SliderAttachment> rangeAttachment;
-    juce::ScopedPointer<juce::AudioProcessorValueTreeState::SliderAttachment> blendAttachment;
-    juce::ScopedPointer<juce::AudioProcessorValueTreeState::SliderAttachment> volumeAttachment;*/
+  
 
     // This reference is provided as a quick way for your editor to
     // access the processor object that created it.
@@ -43,10 +35,3 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DistortionModellingAudioProcessorEditor)
 };
 
-/*class QuickSlider : public DistortionModellingAudioProcessorEditor {
-public:    
-    juce::ScopedPointer<juce::Slider> knob;
-    juce::ScopedPointer<juce::AudioProcessorValueTreeState::SliderAttachment> knob; //saves parameter values
-
-
-};*/
