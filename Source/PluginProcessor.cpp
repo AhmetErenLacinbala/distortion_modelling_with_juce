@@ -8,6 +8,7 @@
 
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+# define M_PI           3.14159265358979323846
 
 //==============================================================================
 DistortionModellingAudioProcessor::DistortionModellingAudioProcessor()
@@ -106,6 +107,8 @@ void DistortionModellingAudioProcessor::prepareToPlay (double sampleRate, int sa
 {
     // Use this method as the place to do any pre-playback
     // initialisation that you need..
+
+    
 }
 
 void DistortionModellingAudioProcessor::releaseResources()
@@ -146,6 +149,15 @@ void DistortionModellingAudioProcessor::processBlock (juce::AudioBuffer<float>& 
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
 
+    auto gain = apvts.getRawParameterValue("Gain");
+    gain->load(); std::cout << gain << std::endl;
+    auto range = apvts.getRawParameterValue("Range");
+    range->load();
+    auto blend = apvts.getRawParameterValue("Blend");
+    blend->load();
+    auto volume = apvts.getRawParameterValue("Volume");
+    volume->load();
+
     // In case we have more outputs than inputs, this code clears any output
     // channels that didn't contain input data, (because these aren't
     // guaranteed to be empty - they may contain garbage).
@@ -161,9 +173,20 @@ void DistortionModellingAudioProcessor::processBlock (juce::AudioBuffer<float>& 
     // the samples and the outer loop is handling the channels.
     // Alternatively, you can process the samples with the channels
     // interleaved by keeping the same state.
+
+
     for (int channel = 0; channel < totalNumInputChannels; ++channel)
     {
         auto* channelData = buffer.getWritePointer (channel);
+
+        for (int sample = 0; sample < buffer.getNumSamples(); sample++) {
+            float cleanSignal = *channelData;
+            *channelData *= *gain * *range;
+            *channelData = ((((2.f / M_PI) * atan(*channelData)) * *blend) + (cleanSignal * (1.f / *blend)) / 2) * *volume;
+
+            channelData++;
+
+        }
 
         // ..do something to the data...
     }
@@ -213,9 +236,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout DistortionModellingAudioProc
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
 
     layout.add(std::make_unique<juce::AudioParameterFloat>("Gain", "Gain", juce::NormalisableRange<float>(0.f, 1.f, 0.0001), 1.0));
-    layout.add(std::make_unique<juce::AudioParameterFloat>("Range", "Range", juce::NormalisableRange<float>(0.f, 1.f, 0.0001), 1.0));
+    layout.add(std::make_unique<juce::AudioParameterFloat>("Range", "Range", juce::NormalisableRange<float>(0.f, 3000.f, 0.0001), 1.0));
     layout.add(std::make_unique<juce::AudioParameterFloat>("Blend", "Blend", juce::NormalisableRange<float>(0.f, 1.f, 0.0001), 1.0));
-    layout.add(std::make_unique<juce::AudioParameterFloat>("Volume", "Volume", juce::NormalisableRange<float>(0.f, 1.f, 0.0001), 1.0));
+    layout.add(std::make_unique<juce::AudioParameterFloat>("Volume", "Volume", juce::NormalisableRange<float>(0.f, 2.f, 0.0001), 1.0));
 
 
     return layout;

@@ -10,6 +10,8 @@
 
 #include <JuceHeader.h>
 
+
+
 //==============================================================================
 /**
 */
@@ -54,11 +56,13 @@ public:
     void setStateInformation (const void* data, int sizeInBytes) override;
 
     juce::AudioProcessorValueTreeState& getState();
+
     //---------------------------------------
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     juce::AudioProcessorValueTreeState apvts{*this, nullptr, "Parameters", createParameterLayout()};
 
 private:
+    using Filter = juce::dsp::IIR::Filter<float>;
     //juce::ScopedPointer<juce::AudioProcessorValueTreeState> state;
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DistortionModellingAudioProcessor)
