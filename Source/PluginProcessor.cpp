@@ -24,16 +24,7 @@ DistortionModellingAudioProcessor::DistortionModellingAudioProcessor()
 #endif
 {
 
-    /*state = new juce::AudioProcessorValueTreeState(*this, nullptr);
-    state->createAndAddParameter("gain", "Gain", "Gain", juce::NormalisableRange<float>(0.f, 1.f, 0.0001), 1.0, nullptr, nullptr);
-    state->createAndAddParameter("range", "Range", "Range", juce::NormalisableRange<float>(0.f, 1.f, 0.0001), 1.0, nullptr, nullptr);
-    state->createAndAddParameter("blend", "Blend", "Blend", juce::NormalisableRange<float>(0.f, 1.f, 0.0001), 1.0, nullptr, nullptr);
-    state->createAndAddParameter("volume", "Volume", "Volume", juce::NormalisableRange<float>(0.f, 1.f, 0.0001), 1.0, nullptr, nullptr);
-
-    state->state = juce::ValueTree("gain");
-    state->state = juce::ValueTree("range");
-    state->state = juce::ValueTree("blend");
-    state->state = juce::ValueTree("volume");*/
+   
 }
 
 DistortionModellingAudioProcessor::~DistortionModellingAudioProcessor()
@@ -105,10 +96,19 @@ void DistortionModellingAudioProcessor::changeProgramName (int index, const juce
 //==============================================================================
 void DistortionModellingAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
+    using namespace juce;
     // Use this method as the place to do any pre-playback
     // initialisation that you need..
 
-    
+    dsp::ProcessSpec spec;
+    spec.sampleRate = sampleRate;
+    spec.maximumBlockSize = samplesPerBlock;
+    spec.numChannels = 1;
+    updateConvolution(sampleRate, samplesPerBlock, getTotalNumInputChannels());
+
+
+
+  
 }
 
 void DistortionModellingAudioProcessor::releaseResources()
@@ -145,6 +145,7 @@ bool DistortionModellingAudioProcessor::isBusesLayoutSupported (const BusesLayou
 
 void DistortionModellingAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
+    using namespace juce;
     juce::ScopedNoDenormals noDenormals;
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
@@ -164,6 +165,7 @@ void DistortionModellingAudioProcessor::processBlock (juce::AudioBuffer<float>& 
     // this code if your algorithm always overwrites all the output channels.
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
+    
 
     // This is the place where you'd normally do the guts of your plugin's
     // audio processing...
@@ -172,22 +174,26 @@ void DistortionModellingAudioProcessor::processBlock (juce::AudioBuffer<float>& 
     // Alternatively, you can process the samples with the channels
     // interleaved by keeping the same state.
 
-
     for (int channel = 0; channel < totalNumInputChannels; ++channel)
     {
         auto* channelData = buffer.getWritePointer (channel);
 
         for (int sample = 0; sample < buffer.getNumSamples(); sample++) {
-            float cleanSignal = *channelData;
-            *channelData *= *gain;
-            *channelData = ((((2.f / M_PI) * atan(*channelData)) * *blend) + (cleanSignal * (1.f / *blend)) / 2) * *volume;
+            
 
-            channelData++;
+            float cleanSignal = channelData[sample];
+            channelData[sample] *= *gain;
+            channelData[sample] = ((((2.f / M_PI) * atan(channelData[sample])) * *blend) + (cleanSignal * (1.f / *blend)) / 2) * *volume;     
 
         }
 
+
+
         // ..do something to the data...
     }
+    dsp::AudioBlock<float> block(buffer);
+    dsp::ProcessContextReplacing<float> context(block);
+    convolution.process(context);
 }
 
 /*juce::AudioProcessorValueTreeState& DistortionModellingAudioProcessor::getState() {
@@ -235,6 +241,27 @@ juce::AudioProcessorValueTreeState::ParameterLayout DistortionModellingAudioProc
 
     return layout;
 }
+
+void DistortionModellingAudioProcessor::updateConvolution(double sampleRate, juce::uint32 maxBlockSize, juce::uint32 totalNumInputChannels)
+{
+    convolution.reset();
+   /* convolution.loadImpulseResponse(juce::File::getCurrentWorkingDirectory().getChildFile("freq_resp").getChildFile("vox custom _bright nt2 off axis.wav"),
+        
+        juce::dsp::Convolution::Stereo::yes,
+        juce::dsp::Convolution::Trim::no,
+        0, juce::dsp::Convolution::Normalise::yes);*/
+    convolution.loadImpulseResponse(juce::File("E:/dev/juce/test/DistortionModelling/Builds/VisualStudio2022/freq_resp/orange cust_sm57 1.wav"),
+
+        juce::dsp::Convolution::Stereo::yes,
+        juce::dsp::Convolution::Trim::no,
+        1024, juce::dsp::Convolution::Normalise::yes);
+    spec.sampleRate = sampleRate;
+    spec.maximumBlockSize = maxBlockSize;
+    spec.numChannels = totalNumInputChannels;
+    convolution.prepare(spec);
+
+}   
+
 
 //==============================================================================
 // This creates new instances of the plugin..
