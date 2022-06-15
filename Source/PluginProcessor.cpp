@@ -6,6 +6,7 @@
   ==============================================================================
 */
 
+#include<stdlib.h>
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 # define M_PI           3.14159265358979323846
@@ -20,7 +21,7 @@ DistortionModellingAudioProcessor::DistortionModellingAudioProcessor()
                       #endif
                        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
                      #endif
-                       )
+                       ),
 #endif
 {
 
@@ -105,6 +106,40 @@ void DistortionModellingAudioProcessor::prepareToPlay (double sampleRate, int sa
     spec.maximumBlockSize = samplesPerBlock;
     spec.numChannels = 1;
     updateConvolution(sampleRate, samplesPerBlock, getTotalNumInputChannels());
+    leftChain.prepare(spec);
+    rightChain.prepare(spec);
+
+    auto HighCutCoefficients = dsp::FilterDesign<float>::designIIRLowpassHighOrderButterworthMethod(
+        apvts.getRawParameterValue("HighCut Freq")->load(),
+        getSampleRate(),
+        1);
+
+    auto& leftHighCut = leftChain.get<ChainPositions::HighCut>();
+    auto& rightHighCut = rightChain.get<ChainPositions::HighCut>();
+
+    leftHighCut.get<0>().coefficients = *HighCutCoefficients[0];
+    leftHighCut.setBypassed<0>(false);
+
+    rightHighCut.get<0>().coefficients = *HighCutCoefficients[0];
+    rightHighCut.setBypassed<0>(false);
+
+
+
+
+    auto LowCutCoefficients = dsp::FilterDesign<float>::designIIRHighpassHighOrderButterworthMethod(
+        apvts.getRawParameterValue("LowCut Freq")->load(),
+        getSampleRate(),
+        1);
+
+
+    auto& leftLowCut = leftChain.get<ChainPositions::LowCut>();
+    auto& rightLowCut = rightChain.get<ChainPositions::LowCut>();
+
+    *rightLowCut.get<0>().coefficients = *LowCutCoefficients[0];
+    rightLowCut.setBypassed<0>(false);
+
+        
+
 
 
 
@@ -149,13 +184,18 @@ void DistortionModellingAudioProcessor::processBlock (juce::AudioBuffer<float>& 
     juce::ScopedNoDenormals noDenormals;
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
+    
 
     auto gain = apvts.getRawParameterValue("Gain");
-    gain->load(); std::cout << gain << std::endl;
-    auto blend = apvts.getRawParameterValue("Blend");
-    blend->load();
+    gain->load();
     auto volume = apvts.getRawParameterValue("Volume");
     volume->load();
+    auto clip = apvts.getRawParameterValue("Hard Clip");
+    clip->load();
+    auto lowCutFreq = apvts.getRawParameterValue("LowCut Freq");
+    lowCutFreq->load();
+    auto highCutFreq = apvts.getRawParameterValue("HighCut Freq");
+    highCutFreq->load();
 
     // In case we have more outputs than inputs, this code clears any output
     // channels that didn't contain input data, (because these aren't
@@ -163,10 +203,55 @@ void DistortionModellingAudioProcessor::processBlock (juce::AudioBuffer<float>& 
     // This is here to avoid people getting screaming feedback
     // when they first compile a plugin, but obviously you don't need to keep
     // this code if your algorithm always overwrites all the output channels.
+    dsp::AudioBlock<float> block(buffer);
+
+    dsp::ProcessContextReplacing<float> context(block);
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
-    
 
+    auto HighCutCoefficients = dsp::FilterDesign<float>::designIIRLowpassHighOrderButterworthMethod(
+        apvts.getRawParameterValue("HighCut Freq")->load(),
+        getSampleRate(),
+        1);
+
+    auto& leftHighCut = leftChain.get<ChainPositions::HighCut>();
+    auto& rightHighCut = rightChain.get<ChainPositions::HighCut>();
+
+    leftHighCut.get<0>().coefficients = *HighCutCoefficients[0];
+    leftHighCut.setBypassed<0>(false);
+
+    rightHighCut.get<0>().coefficients = *HighCutCoefficients[0];
+    rightHighCut.setBypassed<0>(false);
+
+
+
+
+    auto LowCutCoefficients = dsp::FilterDesign<float>::designIIRHighpassHighOrderButterworthMethod(
+        apvts.getRawParameterValue("LowCut Freq")->load(),
+        getSampleRate(),
+        1);
+
+
+    auto& leftLowCut = leftChain.get<ChainPositions::LowCut>();
+    auto& rightLowCut = rightChain.get<ChainPositions::LowCut>();
+
+    *leftLowCut.get<0>().coefficients = *LowCutCoefficients[0];
+    leftLowCut.setBypassed<0>(false);
+
+    *rightLowCut.get<0>().coefficients = *LowCutCoefficients[0];
+    rightLowCut.setBypassed<0>(false);
+
+
+
+
+
+  
+
+
+    auto leftBlock = block.getSingleChannelBlock(0);
+    auto rightBlock = block.getSingleChannelBlock(1);
+    
+ 
     // This is the place where you'd normally do the guts of your plugin's
     // audio processing...
     // Make sure to reset the state if your inner loop is processing
@@ -181,9 +266,10 @@ void DistortionModellingAudioProcessor::processBlock (juce::AudioBuffer<float>& 
         for (int sample = 0; sample < buffer.getNumSamples(); sample++) {
             
 
-            float cleanSignal = channelData[sample];
+            //float cleanSignal = channelData[sample];
             channelData[sample] *= *gain;
-            channelData[sample] = ((((2.f / M_PI) * atan(channelData[sample])) * *blend) + (cleanSignal * (1.f / *blend)) / 2) * *volume;     
+            waveshape(&channelData[sample], clip);
+            channelData[sample] *= *volume;
 
         }
 
@@ -191,9 +277,18 @@ void DistortionModellingAudioProcessor::processBlock (juce::AudioBuffer<float>& 
 
         // ..do something to the data...
     }
-    dsp::AudioBlock<float> block(buffer);
-    dsp::ProcessContextReplacing<float> context(block);
+
+    
+
+
+
+    
+
+
+    leftChain.process(dsp::ProcessContextReplacing<float>(leftBlock));
+    rightChain.process(dsp::ProcessContextReplacing<float>(rightBlock));
     convolution.process(context);
+
 }
 
 /*juce::AudioProcessorValueTreeState& DistortionModellingAudioProcessor::getState() {
@@ -235,22 +330,35 @@ juce::AudioProcessorValueTreeState::ParameterLayout DistortionModellingAudioProc
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
 
     layout.add(std::make_unique<juce::AudioParameterFloat>("Gain", "Gain", juce::NormalisableRange<float>(1.f, 1000.f, 0.0001), 1.0));
-    layout.add(std::make_unique<juce::AudioParameterFloat>("Blend", "Blend", juce::NormalisableRange<float>(0.f, 1.f, 0.0001), 1.0));
+    layout.add(std::make_unique<juce::AudioParameterFloat>("Hard Clip", "Hard Clip", juce::NormalisableRange<float>(0.99f, 1.f, 0.00001), 1.0));
     layout.add(std::make_unique<juce::AudioParameterFloat>("Volume", "Volume", juce::NormalisableRange<float>(0.f, 2.f, 0.0001), 1.0));
+    layout.add(std::make_unique<juce::AudioParameterFloat>("LowCut Freq", "LowCut Freq", juce::NormalisableRange<float>(0.f, 1000.f, 0.5), 1.0));
+    layout.add(std::make_unique<juce::AudioParameterFloat>("HighCut Freq", "HighCut Freq", juce::NormalisableRange<float>(1000.f, 4000.f, 0.5), 1.0));
+
+
+
+    /*juce::StringArray dist_type("Overdrive", "Distortion", "Fuzz");
+    layout.add(std::make_unique<juce::AudioParameterChoice>("Distortion Type", "Distortion Type", dist_type, 0));*/
 
 
     return layout;
 }
+void DistortionModellingAudioProcessor::waveshape(float* input, std::atomic<float>* clip) {
+
+    *input = ((2.f / M_PI) * atan(*input)) * (1 / *clip);
+    if (abs(*input) > *clip) {
+        if (*input > 0) *input = *clip;
+        else *input = *input *= *clip * -1;
+    }
+    *input *= (1 / *clip);
+}
+
+
 
 void DistortionModellingAudioProcessor::updateConvolution(double sampleRate, juce::uint32 maxBlockSize, juce::uint32 totalNumInputChannels)
 {
     convolution.reset();
-   /* convolution.loadImpulseResponse(juce::File::getCurrentWorkingDirectory().getChildFile("freq_resp").getChildFile("vox custom _bright nt2 off axis.wav"),
-        
-        juce::dsp::Convolution::Stereo::yes,
-        juce::dsp::Convolution::Trim::no,
-        0, juce::dsp::Convolution::Normalise::yes);*/
-    convolution.loadImpulseResponse(juce::File("E:/dev/juce/test/DistortionModelling/Builds/VisualStudio2022/freq_resp/orange cust_sm57 1.wav"),
+    convolution.loadImpulseResponse(juce::File("E:/dev/juce/test/DistortionModelling/Builds/VisualStudio2022/freq_resp/orange cust_sm57 1.wav"), //this will be changed
 
         juce::dsp::Convolution::Stereo::yes,
         juce::dsp::Convolution::Trim::no,

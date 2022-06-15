@@ -12,6 +12,7 @@
 
 
 
+
 //==============================================================================
 /**
 */
@@ -60,45 +61,37 @@ public:
     //---------------------------------------
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     juce::AudioProcessorValueTreeState apvts{*this, nullptr, "Parameters", createParameterLayout()};
+    
 
 
 private:
+    void waveshape(float* input, std::atomic<float>* clip);
+
+    float lastSampleRate;
+    using Filter = juce::dsp::IIR::Filter<float>;
+    juce::dsp::ProcessorDuplicator<Filter, juce::dsp::IIR::Coefficients<float>> PassFilter;
+    
+    using CutFilter = juce::dsp::ProcessorChain<Filter, Filter>;
+    using MonoChain = juce::dsp::ProcessorChain<CutFilter, CutFilter>;
+    MonoChain leftChain, rightChain;
+    
+    enum ChainPositions {
+        LowCut,
+        HighCut
+    };
+    
+
     void updateConvolution(double sampleRate, juce::uint32 maxBlockSize, juce::uint32 totalNumInputChannels);
+
     juce::dsp::ProcessorChain<juce::dsp::Convolution> processorChain;
     juce::dsp::Convolution convolution;
     juce::dsp::ProcessSpec spec;
+
+    
+
     
 
    
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DistortionModellingAudioProcessor)
 };
-
-/*class CabSim {
-private:
-    enum {
-        convolutionIndex
-    };
-    using convol = juce::dsp::ProcessorChain<juce::dsp::Convolution>;
-    convol processorChain;
-    void reset() noexcept {
-        processorChain.reset();
-    }
-    CabSim()
-    {
-        auto dir = juce::File::getCurrentWorkingDirectory();
-
-        int numTries = 0;
-
-        while (!dir.getChildFile("Resources").exists() && numTries++ < 15)
-            dir = dir.getParentDirectory();
-
-        auto& convolution = processorChain.template get<convolutionIndex>();    // [5]
-
-        convolution.loadImpulseResponse(dir.getChildFile("freq_resp").getChildFile("orange cust_sm57 1.wav"),
-            juce::dsp::Convolution::Stereo::no,
-            juce::dsp::Convolution::Trim::no,
-            1024);                                 
-    }
-  
-};*/
